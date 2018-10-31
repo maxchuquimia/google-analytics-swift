@@ -15,14 +15,27 @@ This entire codebase is a single file, so I don’t see the need to add it to Co
 Set up the tracker with default values for every request:
 
 ```
-GAMeasurement.setup(...)
+GAMeasurement.setup(with: .init(user: .user(ID: "test"), trackingId: "UA-123456789-1"))
+
+// If you want events/error to be logged to the console
+GAMeasurement.log = { print($0) }
 ```
 
 
 Then, start tracking as needed:
 
 ```
-GAMeasurement.track(.event(...))
+GAMeasurement.track(.event(category: "App", action: "Launch", label: nil, value: nil))
+
+GAMeasurement.track(.screen(name: "Test Screen"))
+
+GAMeasurement.track(.exception(description: "Error!"))
 ```
 
 It’s as strongly typed as possible, so everything should be fairly self explanatory.
+
+
+## Resources
+
+Event Guide: https://developers.google.com/analytics/devguides/collection/protocol/v1/devguide
+Parameters Reference: https://developers.google.com/analytics/devguides/collection/protocol/v1/parameters
