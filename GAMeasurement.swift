@@ -8,44 +8,85 @@ protocol QueryRepresentable {
 
 struct GAMeasurement {
 
-    private static let collectURL = URL(string: "https://www.google-analytics.com/collect")!
+    private static let batchURL = URL(string: "https://www.google-analytics.com/batch")!
     private static let session = URLSession(configuration: URLSessionConfiguration.ephemeral)
     private(set) static var defaultValues: Models.Collect!
     static var log: ((String) -> ())?
+    
+    private static var queuedHits: [String] = [] {
+        didSet {
+            if oldValue.isEmpty {
+                // If there was nothing in the array, we schedule sending in a sec
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    self.sendQueuedData()
+                }
+            }
+        }
+    }
     
     static func setup(with defaults: Models.Collect) {
         defaultValues = defaults
     }
     
-    static func track(_ event: Request) {
+    static func track(_ event: Request, custom: Models.Custom? = nil) {
         
         // Abuse URLComponents to give us an encoded query string
-        var url = URLComponents(url: collectURL, resolvingAgainstBaseURL: false)!
-        url.queryItems = defaultValues.queryItems + event.queryItems 
+        var url = URLComponents(url: batchURL, resolvingAgainstBaseURL: false)!
+        var queryItems = defaultValues.queryItems + event.queryItems
+        
+        if let c = custom {
+            queryItems = queryItems + c.queryItems
+        }
+        
+        url.queryItems = queryItems.filter({ $0.value != nil })
+        
         guard let queryString = url.percentEncodedQuery  else { return }
         url.queryItems = nil
         
-        // Make the request
-        var request = URLRequest(url: collectURL, cachePolicy: .reloadIgnoringCacheData, timeoutInterval: 20.0)
+        queuedHits.append(queryString)
+    }
+    
+    private static func sendQueuedData() {
+        
+        guard !queuedHits.isEmpty else { return }
+        
+        let bodyString = queuedHits.joined(separator: "\n") + "\n" // Seems like we need a new line at the end?
+        queuedHits = []
+        
+        var request = URLRequest(url: batchURL, cachePolicy: .reloadIgnoringCacheData, timeoutInterval: 20.0)
         request.httpMethod = "POST"
-        request.httpBody = (queryString + "\n").data(using: .utf8)
+        request.httpBody = bodyString.data(using: .utf8)
         
         
         session.dataTask(with: request) { (data, response, error) in
             
             if let error = error {
-                log?("[Analytics] Error: \(error)")
+                log?("Error: \(error)")
             } else if let code = (response as? HTTPURLResponse)?.statusCode, code != 200 {
-                log?("[Analytics] Error: \(code)")
+                log?("Error: \(code)")
             } else {
-                log?("[Analytics] Sent \(queryString)")
+                log?("Sent data:\n\(bodyString)")
             }
         }
         .resume()
     }
     
     struct Models {
-        
+
+        struct Custom: QueryRepresentable {
+            let dimensionIndex: Int
+            let dimensionValue: String
+            let metricIndex: Int
+            let metricValue: Int
+            
+            var queryItems: [URLQueryItem] {
+                return [
+                    URLQueryItem(name: "cd\(dimensionIndex)", value: dimensionValue),
+                    URLQueryItem(name: "cm\(metricIndex)", value: "\(metricValue)"),
+                ]
+            }
+        }
+
         struct Collect: QueryRepresentable {
             
             enum AnalyticsVersion: String, QueryRepresentable {
@@ -73,12 +114,14 @@ struct GAMeasurement {
             
             let queryItems: [URLQueryItem]
             
-            init(version: AnalyticsVersion = .one, user: Identifier, trackingId: String, appInfo: AppInfo? = .default) {
+            init(version: AnalyticsVersion = .one, user: Identifier, trackingId: String, datasource: String? = "app", userLanguage: String? = Locale.current.languageCode, appInfo: AppInfo? = .default) {
                 queryItems =
                     version.queryItems +
                     (appInfo?.queryItems ?? []) +
                     user.queryItems + [
-                        URLQueryItem(name: "tid", value: trackingId)
+                        URLQueryItem(name: "tid", value: trackingId),
+                        URLQueryItem(name: "ds", value: datasource),
+                        URLQueryItem(name: "ul", value: userLanguage)
                 ]
             }
         }
@@ -106,7 +149,7 @@ struct GAMeasurement {
     
     enum Request: QueryRepresentable {
         
-        case event(category: String, action: String, label: String?, value: String?)
+        case event(category: String, action: String, label: String?, value: Int?)
         case exception(description: String)
         case screen(name: String)
         
@@ -127,7 +170,7 @@ struct GAMeasurement {
                         URLQueryItem(name: "ec", value: category),
                         URLQueryItem(name: "ea", value: action),
                         URLQueryItem(name: "el", value: label),
-                        URLQueryItem(name: "ev", value: value),
+                        URLQueryItem(name: "ev", value: value == nil ? nil : "\(value!)"),
                     ]
                     
                 case let .exception(description):

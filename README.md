@@ -7,7 +7,7 @@ Last night two things happened: my girlfriend made last minute dinner plans and 
 Anyway, long story short, instead of going to bed early I made this wrapper for the Google Measurement API. 
 
 ## Support
-You can theoretically use this in your Mac or iOS apps, or anywhere that runs Swift. I haven’t tested it everywhere though, so feel free to submit PRs. 
+You can theoretically use this in your macOS, tvOS or iOS apps, or anywhere that runs Swift. I haven’t tested it everywhere though, so feel free to submit PRs. 
 
 This entire codebase is a single file, so I don’t see the need to add it to Cocoapods etc.  Drop the file into your XCode project, use a git submodule... it’s up to you to decide what’s best. 
 
@@ -37,5 +37,5 @@ It’s as strongly typed as possible, so everything should be fairly self explan
 
 ## Resources
 
-Event Guide: https://developers.google.com/analytics/devguides/collection/protocol/v1/devguide
-Parameters Reference: https://developers.google.com/analytics/devguides/collection/protocol/v1/parameters
+- Event Guide: https://developers.google.com/analytics/devguides/collection/protocol/v1/devguide
+- Parameters Reference: https://developers.google.com/analytics/devguides/collection/protocol/v1/parameters
